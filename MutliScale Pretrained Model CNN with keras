@@ -1,0 +1,133 @@
+import keras 
+from keras.layers import * 
+from keras.models import * 
+from keras.preprocessing.image import * 
+
+
+InceptionResNetV2_ms_1=keras.applications.resnet.ResNet50(include_top=False, weights='imagenet',input_shape=(600,600,3))
+
+InceptionResNetV2_ms_2=keras.applications.vgg19.VGG19(include_top=False, weights='imagenet', input_shape=(600,600,3))
+
+
+for layer in InceptionResNetV2_ms_1.layers:
+  layer.trainable = False
+
+for layer in InceptionResNetV2_ms_2.layers:
+  layer.trainable = False
+
+InceptionResNetV2_ms_1_out = InceptionResNetV2_ms_1.output
+InceptionResNetV2_ms_1_final=GlobalAveragePooling2D()(InceptionResNetV2_ms_1_out)
+
+InceptionResNetV2_ms_2_out = InceptionResNetV2_ms_2.output
+InceptionResNetV2_ms_2_final=GlobalAveragePooling2D()(InceptionResNetV2_ms_2_out)
+
+#merginig the towpre-trianined models'out put then add remaing final layers with addTopModeInceptionResNetV2_mergemodel()
+
+merged_model = Concatenate()([InceptionResNetV2_ms_1_final, InceptionResNetV2_ms_2_final])
+
+top_model= Dense(128,activation='relu')(merged_model)
+top_model= Dense(10,activation='softmax')(top_model)
+adam = keras.optimizers.Adam(lr=0.004, beta_1=0.9, beta_2=0.999, amsgrad=False)
+rmprop = keras.optimizers.RMSprop(lr=0.0002, rho=0.9)
+adamax = keras.optimizers.Adamax(lr=0.002, beta_1=0.9, beta_2=0.999)
+
+
+
+
+model=Model(inputs=[InceptionResNetV2_ms_1.input,InceptionResNetV2_ms_2.input],outputs=top_model)
+
+model.compile(loss='categorical_crossentropy', optimizer=rmprop, metrics=['accuracy'])
+
+
+
+
+
+data= "/content/drive/My Drive/DL_2_Dataset/data"
+traindir1=data#"/content/drive/My Drive/DL_2_Dataset/bbrod/train"
+traindir2=data#"/content/drive/My Drive/DL_2_Dataset/bbrod/train"
+
+testdir1=data#"/content/drive/My Drive/DL_2_Dataset/bbrod/train"
+testdir2=data#"/content/drive/My Drive/DL_2_Dataset/bbrod/train"
+
+img_height = 600
+img_width = 600
+
+input_imgen = ImageDataGenerator(rescale = 1./255,
+   rotation_range=80,
+    width_shift_range=0.6,
+  height_shift_range=0.5,
+    horizontal_flip=True,zoom_range=0.8,vertical_flip=True,
+    validation_split=0.1)
+
+test_imgen = ImageDataGenerator(rescale = 1./255,rotation_range=75,
+    width_shift_range=0.4,
+  height_shift_range=0.6,
+    horizontal_flip=True,zoom_range=0.5,vertical_flip=True)
+
+batch_size=16
+
+def generate_generator_multiple(generator,dir1, dir2, batch_size, img_height,img_width,subset):
+    genX1 = generator.flow_from_directory(dir1,
+                                          target_size = (img_height,img_width),
+                                          class_mode = 'categorical',
+                                          batch_size = batch_size,
+                                          shuffle=False,
+                                          seed=7,subset=subset)
+    
+    genX2 = generator.flow_from_directory(dir2,
+                                          target_size = (img_height,img_width),
+                                          class_mode = 'categorical',
+                                          batch_size = batch_size,
+                                          shuffle=False,
+                                          seed=7,subset=subset)
+    while True:
+            X1i = genX1.next()
+            X2i = genX2.next()
+            yield [X1i[0], X2i[0]], X2i[1]  
+             
+inputgenerator=generate_generator_multiple(generator=input_imgen,
+                                           dir1=traindir1,
+                                           dir2=traindir2,
+                                           batch_size=batch_size,
+                                           img_height=img_height,
+                                           img_width=img_width,subset="training")       
+
+testgenerator=generate_generator_multiple(input_imgen,
+                                          dir1=testdir1,
+                                          dir2=testdir2,
+                                          batch_size=batch_size,
+                                          img_height=img_height,
+                                          img_width=img_width,subset="validation")              
+          
+
+
+
+
+
+history=model.fit_generator(inputgenerator,
+                    #steps_per_epoch=trainsetsize/batch_size,
+                    steps_per_epoch=200 ,
+                    epochs = 10,
+                    validation_data = testgenerator,
+                    validation_steps = 50,
+                    shuffle=False)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
